@@ -1,1 +1,16 @@
-export class Settings{constructor(data={}){const now=new Date().toISOString();this.key="global";this.criticalThresholdPercent=data.criticalThresholdPercent??20;this.orangeAlertDays=data.orangeAlertDays??30;this.orangeAlertPercent=data.orangeAlertPercent??10;this.dashboardSort=data.dashboardSort??"urgency";this.showArchived=data.showArchived??false;this.createdAt=data.createdAt??now;this.updatedAt=data.updatedAt??now}}export function createDefaultSettings(){return new Settings()}
+import { DASHBOARD_SORTS } from "./constants.js";
+export class Settings {
+  constructor(data = {}) {
+    const now = new Date().toISOString();
+    this.key = "global";
+    this.criticalThresholdPercent = data.criticalThresholdPercent ?? 20;
+    this.orangeAlertDays = data.orangeAlertDays ?? 30;
+    this.orangeAlertPercent = data.orangeAlertPercent ?? 10;
+    this.dashboardSort = data.dashboardSort ?? DASHBOARD_SORTS.URGENCY;
+    this.showArchived = data.showArchived ?? false;
+    this.createdAt = data.createdAt ?? now;
+    this.updatedAt = data.updatedAt ?? now;
+  }
+}
+export function createDefaultSettings() { return new Settings(); }
+export function updateSettings(settings, updates = {}) { return new Settings({ ...settings, ...updates, createdAt: settings.createdAt, updatedAt: new Date().toISOString() }); }
