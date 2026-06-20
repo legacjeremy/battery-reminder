@@ -1,91 +1,55 @@
 # Battery Reminder
 
-Application web statique pour suivre l'autodécharge de batteries stockées.
+Application web statique/PWA pour aider à éviter les décharges profondes des batteries rarement utilisées en estimant leur autodécharge et en affichant un statut visuel.
 
 ## Version
 
-v0.5
+v0.6.0
 
-## Objectif
+## Fonctionnalités implémentées
 
-Aider à éviter les décharges profondes des batteries rarement utilisées en estimant leur autodécharge et en affichant un statut visuel.
-
-
-## Changements v0.5
-
-- Ajout du mode PWA installable
-- Ajout des icones PWA `icon-192.png` et `icon-512.png`
-- Ajout de `apple-touch-icon.png` et `favicon.png`
-- Ajout de `service-worker.js`
-- Enregistrement automatique du service worker dans `js/app.js`
-- Cache hors ligne de l'application de base
-
-## PWA
-
-Pour que Chrome propose l'installation de l'application, le projet contient :
-
-- `manifest.json` avec `name`, `short_name`, `start_url`, `scope`, `display`, `theme_color` et les icones
-- `assets/icon-192.png`
-- `assets/icon-512.png`
-- `service-worker.js`
-- l'enregistrement du service worker dans `js/app.js`
-
-L'installation PWA fonctionne correctement une fois l'application servie en HTTPS, par exemple avec GitHub Pages.
-
-Après une mise à jour du service worker, Chrome peut garder l'ancienne version en cache. En cas de doute, ouvrir DevTools > Application > Service Workers puis faire `Update` ou vider les données du site.
-
-## Fonctionnalités incluses
-
-- IndexedDB pour le stockage local
-- Création, modification, archivage, restauration et suppression définitive de batteries
-- Ajout, modification et suppression de mesures
+- PWA installable
+- IndexedDB
+- Suivi de batteries individuelles
 - Mesures en pourcentage
 - Mesures par LEDs fixes
 - Mesures par LEDs fixes + clignotantes
-- Slider LED bidirectionnel : le slider modifie le pourcentage, et le pourcentage modifie les LEDs
-- Bouton `+` contextuel selon la page
-- Page `🔋 Batteries`
-- Page `📦 Archives`
-- Menu `⚙️ Paramètres`
-- Export JSON
-- Import JSON avec remplacement des données
-- Tableau de bord avec batteries actives et archivées
-- Tri depuis le tableau de bord et la page Batteries
-- Historique avec perte en `%/j` par rapport à la mesure précédente
-- Affichage relatif des dates, par exemple `il y a 34 j`
+- Pourcentage manuel modifiable même avec une observation LED
+- Cycles de recharge
+- Bouton "Rechargé à 100 %"
+- Estimation en temps réel du niveau actuel avec le symbole `≈`
+- Statuts visuels : 🟢 OK, 🟠 À surveiller, 🔴 À recharger, ⚪ Non initialisée
+- Tableau de bord avec compteur de batteries archivées
+- Page 🔋 Batteries avec accès aux Archives
+- Page 📦 Archives
+- Page ⚙️ Paramètres
+- Thème clair / sombre / système
+- Import / export JSON dans Paramètres
+- Modale À propos
+- Tri mémorisé : urgence, nom, ≈ % restant, dernière mesure, dernière recharge, statut
+- Historique avec perte `%/j`
+- Archivage / restauration / suppression définitive
+- Modification / suppression des mesures
+- FAB contextuel selon la page
 
-## Logique du bouton `+`
+## Backlog validé
 
-| Page | Action |
-|---|---|
-| 🏠 Tableau de bord | Ajouter une mesure en choisissant la batterie |
-| 🔋 Batteries | Créer une batterie |
-| 🔋 Fiche batterie active | Ajouter mesure, rechargé à 100 %, modifier, archiver |
-| 📦 Archives | Supprimer définitivement une batterie archivée |
-| 📦 Fiche batterie archivée | Restaurer ou supprimer définitivement |
-| ⚙️ Paramètres | Bouton masqué |
-
-## Paramètres
-
-- 🟠 Seuil d'alerte (%)
-- 🔴 Seuil critique (%)
-- 📅 Préalerte en jours avant l'échéance estimée
-
-## Fonctionnalités futures validées ou envisagées
-
-- Notifications PWA
-- Paramètres d'affichage avancés
+- Détection et confirmation des mesures aberrantes
 - Graphique d'autodécharge
-- Détection plus robuste des mesures aberrantes
-- Confirmation spécifique pour les mesures atypiques
-- Sauvegarde cloud optionnelle
-- Synchronisation multi-appareils
-- QR Code ou NFC par batterie
-- Mode installation téléphone plus poussé
+- Notifications PWA
+- Meilleure gestion des conversions LED vers pourcentage
+- Détail avancé des cycles
+- Export CSV
+- Synchronisation optionnelle multi-appareils
 
-## Notes techniques
+## Idées futures
 
-- Application statique compatible GitHub Pages
-- Pas de serveur requis
-- Données stockées dans IndexedDB, donc propres à chaque navigateur/appareil
-- Ouvrir via GitHub Pages ou un serveur local. Ne pas ouvrir `index.html` directement en `file://`, car les modules JavaScript ES6 peuvent être bloqués.
+- NFC / QR Code par batterie
+- Intégration Home Assistant
+- Import de modèles prédéfinis pour certains appareils
+- Statistiques avancées
+- Icône PWA personnalisée plus travaillée
+
+## Important
+
+L'application doit être servie via GitHub Pages ou un serveur local. Ne pas ouvrir `index.html` directement en `file://`, car les modules JavaScript ES6 et le Service Worker peuvent être bloqués.

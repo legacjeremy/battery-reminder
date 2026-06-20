@@ -2,18 +2,23 @@ import { initDb, getAllBatteries, getMeasurementsByBatteryId, getSettings, saveS
 import { Battery, createBattery, updateBattery, archiveBattery, restoreBattery } from "./battery.js";
 import { createChargeMeasurement, createLedMeasurement, createPercentageMeasurement } from "./measurement.js";
 import { calculateBatteryStatus, sortBatteryStatusItems } from "./calculation.js";
-import { renderDashboard, renderBatteriesPage, renderArchivesPage, renderBatteryDetails, renderSettingsPage, openBatteryFormModal, openAddMeasurementModal, openQuickMeasurementPicker, openBatteryActionModal, openArchivesDeletePicker, openSideMenu, closeModal, setFabVisible } from "./ui.js";
+import { renderDashboard, renderBatteriesPage, renderArchivesPage, renderBatteryDetails, renderSettingsPage, openBatteryFormModal, openAddMeasurementModal, openQuickMeasurementPicker, openBatteryActionModal, openArchivesDeletePicker, closeModal, setFabVisible, setActiveNav } from "./ui.js";
 import { downloadJsonBackup, readJsonBackup, replaceWithImportedData } from "./import-export.js";
-import { INPUT_MODES, VIEWS } from "./constants.js";
+import { INPUT_MODES, VIEWS, THEMES } from "./constants.js";
 import { updateSettings } from "./settings.js";
 let state = { batteries: [], settings: null, statuses: [], view: VIEWS.DASHBOARD, currentBatteryId: null };
 
 async function main() {
   await registerServiceWorker();
-  await initDb(); await reloadState(); renderDashboardView();
+  await initDb();
+  await reloadState();
+  applyTheme(state.settings.theme);
+  renderDashboardView();
   document.querySelector("#floating-action-button").addEventListener("click", handleFabClick);
-  document.querySelector("#menu-button").addEventListener("click", () => openSideMenu({ onDashboard: renderDashboardView, onBatteries: renderBatteriesView, onArchives: renderArchivesView, onSettings: renderSettingsView, onExportJson: downloadJsonBackup, onImportJson: triggerImport }));
-  document.querySelector("#import-json-input").addEventListener("change", handleImportFile);
+  document.querySelector("#nav-dashboard").addEventListener("click", renderDashboardView);
+  document.querySelector("#nav-batteries").addEventListener("click", renderBatteriesView);
+  document.querySelector("#nav-settings").addEventListener("click", renderSettingsView);
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme(state.settings.theme));
 }
 async function reloadState() {
   state.settings = await getSettings();
@@ -21,19 +26,20 @@ async function reloadState() {
   state.statuses = [];
   for (const battery of state.batteries) { const measurements = await getMeasurementsByBatteryId(battery.id); state.statuses.push({ battery, status: calculateBatteryStatus(battery, measurements, state.settings) }); }
 }
+function applyTheme(theme) { const resolved = theme === THEMES.SYSTEM ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? THEMES.DARK : THEMES.LIGHT) : theme; document.documentElement.dataset.theme = resolved; }
 function getArchivedCount() { return state.batteries.filter(b => b.archived).length; }
 function activeSorted(mode) { return sortBatteryStatusItems(state.statuses.filter(i => !i.battery.archived), mode); }
 function archivedItems() { return state.statuses.filter(i => i.battery.archived); }
-function renderDashboardView() { state.view = VIEWS.DASHBOARD; state.currentBatteryId = null; setFabVisible(true); renderDashboard(activeSorted(state.settings.dashboardSort), state.settings, getArchivedCount(), { onOpenBattery: openBatteryDetails, onSortChange: handleDashboardSort }); }
-function renderBatteriesView() { state.view = VIEWS.BATTERIES; state.currentBatteryId = null; setFabVisible(true); renderBatteriesPage(activeSorted(state.settings.batteriesSort), state.settings, { onOpenBattery: openBatteryDetails, onSortChange: handleBatteriesSort }); }
-function renderArchivesView() { state.view = VIEWS.ARCHIVES; state.currentBatteryId = null; setFabVisible(archivedItems().length > 0); renderArchivesPage(archivedItems(), { onOpenBattery: openBatteryDetails }); }
-function renderSettingsView() { state.view = VIEWS.SETTINGS; state.currentBatteryId = null; setFabVisible(false); renderSettingsPage(state.settings, { onSave: handleSettingsSave }); }
-async function openBatteryDetails(id) { const battery = state.batteries.find(b => b.id === id); const measurements = await getMeasurementsByBatteryId(id); const status = calculateBatteryStatus(battery, measurements, state.settings); state.view = battery.archived ? VIEWS.ARCHIVED_BATTERY_DETAILS : VIEWS.BATTERY_DETAILS; state.currentBatteryId = id; setFabVisible(true); renderBatteryDetails(battery, measurements, status, { onEditMeasurement: (measurementId) => openEditMeasurement(battery, measurements.find(m => m.id === measurementId)) }); }
-async function handleDashboardSort(sort) { state.settings = updateSettings(state.settings, { dashboardSort: sort }); await saveSettings(state.settings); renderDashboardView(); }
-async function handleBatteriesSort(sort) { state.settings = updateSettings(state.settings, { batteriesSort: sort }); await saveSettings(state.settings); renderBatteriesView(); }
-async function handleSettingsSave(updates) { state.settings = updateSettings(state.settings, updates); await saveSettings(state.settings); await reloadState(); renderSettingsView(); }
+function renderDashboardView() { state.view = VIEWS.DASHBOARD; state.currentBatteryId = null; setActiveNav(state.view); setFabVisible(true); renderDashboard(activeSorted(state.settings.dashboardSort), state.settings, getArchivedCount(), { onOpenBattery: openBatteryDetails, onSortChange: handleDashboardSort }); }
+function renderBatteriesView() { state.view = VIEWS.BATTERIES; state.currentBatteryId = null; setActiveNav(state.view); setFabVisible(true); renderBatteriesPage(activeSorted(state.settings.batteriesSort), state.settings, getArchivedCount(), { onOpenBattery: openBatteryDetails, onSortChange: handleBatteriesSort, onArchives: renderArchivesView }); }
+function renderArchivesView() { state.view = VIEWS.ARCHIVES; state.currentBatteryId = null; setActiveNav(state.view); setFabVisible(archivedItems().length > 0); renderArchivesPage(archivedItems(), { onOpenBattery: openBatteryDetails }); }
+function renderSettingsView() { state.view = VIEWS.SETTINGS; state.currentBatteryId = null; setActiveNav(state.view); setFabVisible(false); renderSettingsPage(state.settings, { onSave: handleSettingsSave, onExportJson: downloadJsonBackup, onImportJson: handleImportFile }); }
+async function openBatteryDetails(id) { const battery = state.batteries.find(b => b.id === id); const measurements = await getMeasurementsByBatteryId(id); const status = calculateBatteryStatus(battery, measurements, state.settings); state.view = battery.archived ? VIEWS.ARCHIVED_BATTERY_DETAILS : VIEWS.BATTERY_DETAILS; state.currentBatteryId = id; setActiveNav(state.view); setFabVisible(true); renderBatteryDetails(battery, measurements, status, { onEditMeasurement: (measurementId) => openEditMeasurement(battery, measurements.find(m => m.id === measurementId)) }); }
+async function handleDashboardSort(sort) { state.settings = updateSettings(state.settings, { dashboardSort: sort }); await saveSettings(state.settings); await reloadState(); renderDashboardView(); }
+async function handleBatteriesSort(sort) { state.settings = updateSettings(state.settings, { batteriesSort: sort }); await saveSettings(state.settings); await reloadState(); renderBatteriesView(); }
+async function handleSettingsSave(updates) { state.settings = updateSettings(state.settings, updates); await saveSettings(state.settings); applyTheme(state.settings.theme); await reloadState(); renderSettingsView(); }
 function handleFabClick() {
-  if (state.view === VIEWS.DASHBOARD) return openQuickMeasurementPicker(activeSorted(state.settings.dashboardSort), { onSelectBattery: b => openAddMeasurementForBattery(b) });
+  if (state.view === VIEWS.DASHBOARD) return openQuickMeasurementPicker(activeSorted(state.settings.dashboardSort), { onSelectBattery: b => { closeModal(); openAddMeasurementForBattery(b); } });
   if (state.view === VIEWS.BATTERIES) return openBatteryFormModal({ onSave: handleCreateBattery });
   if (state.view === VIEWS.BATTERY_DETAILS || state.view === VIEWS.ARCHIVED_BATTERY_DETAILS) return openBatteryActionsForCurrent();
   if (state.view === VIEWS.ARCHIVES) return openArchivesDeletePicker(archivedItems(), { onDeleteBattery: handleDeleteBatteryById });
@@ -56,19 +62,6 @@ async function handleCreateMeasurement(battery, data) {
   const measurement = battery.preferredInputMode === INPUT_MODES.LED && battery.ledConfig ? createLedMeasurement({ ...common, ledCount: battery.ledConfig.ledCount, behavior: battery.ledConfig.behavior, sliderPosition: data.sliderPosition }) : createPercentageMeasurement(common);
   await saveMeasurement(measurement); await reloadState(); await openBatteryDetails(battery.id);
 }
-function triggerImport() { document.querySelector("#import-json-input").click(); }
-async function handleImportFile(event) { const file = event.target.files?.[0]; if (!file) return; if (!confirm("Importer ce fichier ? Les données actuelles seront remplacées.")) return; const data = await readJsonBackup(file); await replaceWithImportedData(data); await reloadState(); renderDashboardView(); event.target.value = ""; }
-
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) {
-    return;
-  }
-
-  try {
-    await navigator.serviceWorker.register("./service-worker.js");
-  } catch (error) {
-    console.warn("Service worker non enregistré", error);
-  }
-}
-
+async function handleImportFile(file) { if (!file) return; if (!confirm("Importer ce fichier ? Les données actuelles seront remplacées.")) return; const data = await readJsonBackup(file); await replaceWithImportedData(data); await reloadState(); renderDashboardView(); }
+async function registerServiceWorker() { if (!("serviceWorker" in navigator)) return; try { await navigator.serviceWorker.register("./service-worker.js"); } catch (error) { console.warn("Service worker non enregistré", error); } }
 main().catch(error => { console.error(error); document.querySelector("#app").innerHTML = `<section class="card"><h2>Erreur</h2><p>${error.message}</p></section>`; });

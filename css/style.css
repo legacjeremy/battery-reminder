@@ -93,3 +93,27 @@ textarea { min-height: 90px; }
 .search-box { margin-bottom: 1rem; }
 .helper-text { color: var(--muted); font-size: 0.9rem; }
 .small-text { color: var(--muted); font-size: 0.85rem; }
+
+[data-theme="dark"] {
+  --bg: #111827;
+  --card: #1f2937;
+  --text: #f9fafb;
+  --muted: #9ca3af;
+  --border: #374151;
+  --primary: #f9fafb;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #4ade80;
+}
+[data-theme="dark"] .button, [data-theme="dark"] .icon-button, [data-theme="dark"] .fab { color: #111827; }
+[data-theme="dark"] .secondary-button, [data-theme="dark"] .secondary-icon { background: #374151; color: var(--text); }
+.top-nav { margin-left: auto; display: flex; gap: 0.35rem; }
+.nav-button { width: 42px; height: 42px; border: 0; border-radius: 999px; background: transparent; font-size: 1.25rem; cursor: pointer; }
+.nav-button.active { background: var(--primary); color: white; }
+[data-theme="dark"] .nav-button.active { color: #111827; }
+.value-red { color: var(--danger); font-weight: 800; }
+.value-orange { color: var(--warning); font-weight: 800; }
+.value-green { color: var(--success); font-weight: 800; }
+.value-gray { color: var(--muted); font-weight: 800; }
+.archives-link { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.about-text { line-height: 1.5; }

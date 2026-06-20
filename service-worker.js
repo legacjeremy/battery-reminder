@@ -1,4 +1,4 @@
-const CACHE_NAME = "battery-reminder-v0-5";
+const CACHE_NAME = "battery-reminder-v0-6";
 
 const APP_SHELL = [
   "./",

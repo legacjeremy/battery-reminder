@@ -1,13 +1,17 @@
-import { APP_VERSION, BATTERY_INPUT_TYPES, INPUT_MODES, LED_BEHAVIORS, STATUS, DASHBOARD_SORTS } from "./constants.js";
+import { APP_VERSION, BATTERY_INPUT_TYPES, INPUT_MODES, LED_BEHAVIORS, STATUS, DASHBOARD_SORTS, THEMES } from "./constants.js";
 import { buildLedAdvancedState, buildLedSimpleState, convertLedAdvancedToPercent, convertLedSimpleToPercent, getLedSliderPositionFromPercent } from "./measurement.js";
-import { calculateMeasurementRates, daysBetween, formatRelativeDate } from "./calculation.js";
+import { calculateMeasurementRates, formatRelativeDate } from "./calculation.js";
 const app = document.querySelector("#app");
 const modalRoot = document.querySelector("#modal-root");
-const sideMenu = document.querySelector("#side-menu");
 const pageTitle = document.querySelector("#page-title");
 
 export function setPageTitle(title) { pageTitle.textContent = title; }
 export function setFabVisible(visible) { document.querySelector("#floating-action-button").hidden = !visible; }
+export function setActiveNav(view) {
+  document.querySelector("#nav-dashboard").classList.toggle("active", view === "dashboard");
+  document.querySelector("#nav-batteries").classList.toggle("active", ["batteries","battery-details","archives","archived-battery-details"].includes(view));
+  document.querySelector("#nav-settings").classList.toggle("active", view === "settings");
+}
 
 export function renderDashboard(items, settings, archivedCount, handlers) {
   setPageTitle("Tableau de bord");
@@ -30,27 +34,33 @@ export function renderDashboard(items, settings, archivedCount, handlers) {
   bindSort("#dashboard-sort", handlers.onSortChange);
 }
 
-export function renderBatteriesPage(items, settings, handlers) {
+export function renderBatteriesPage(items, settings, archivedCount, handlers) {
   setPageTitle("🔋 Batteries");
   const active = items.filter(i => !i.battery.archived);
-  app.innerHTML = `<section class="card"><h2>🔋 Batteries</h2>${renderSortControl("batteries-sort", settings.batteriesSort)}${active.length === 0 ? `<p class="empty-state">Aucune batterie active.</p>` : renderBatteryList(active)}</section>`;
-  bindBatteryButtons(handlers.onOpenBattery);
+  app.innerHTML = `<section class="card"><h2>🔋 Batteries</h2>${renderSortControl("batteries-sort", settings.batteriesSort)}<label class="search-box">Rechercher<input id="battery-search" type="search" placeholder="DJI, laser, trottinette..."></label><div id="battery-list-zone">${active.length === 0 ? `<p class="empty-state">Aucune batterie active.</p>` : renderBatteryList(active)}</div><div class="archives-link"><button id="open-archives" class="button secondary-button" type="button">📦 Archives (${archivedCount})</button></div></section>`;
+  const zone = app.querySelector("#battery-list-zone");
+  const search = app.querySelector("#battery-search");
+  const bind = () => zone.querySelectorAll("[data-battery-id]").forEach(btn => btn.addEventListener("click", () => handlers.onOpenBattery(btn.dataset.batteryId)));
+  bind();
+  search.addEventListener("input", () => { const q = search.value.trim().toLowerCase(); const filtered = active.filter(i => i.battery.name.toLowerCase().includes(q)); zone.innerHTML = filtered.length ? renderBatteryList(filtered) : `<p class="empty-state">Aucune batterie trouvée.</p>`; bind(); });
   bindSort("#batteries-sort", handlers.onSortChange);
+  app.querySelector("#open-archives").onclick = handlers.onArchives;
 }
 
 export function renderArchivesPage(items, handlers) {
   setPageTitle("📦 Archives");
   const archived = items.filter(i => i.battery.archived);
-  app.innerHTML = `<section class="card"><h2>📦 Archives</h2><p class="helper-text">Batteries archivées : ${archived.length}</p>${archived.length === 0 ? `<p class="empty-state">Aucune batterie archivée.</p>` : renderBatteryList(archived)}</section>`;
+  app.innerHTML = `<section class="card"><h2>📦 Archives (${archived.length})</h2>${archived.length === 0 ? `<p class="empty-state">Aucune batterie archivée.</p>` : renderBatteryList(archived)}</section>`;
   bindBatteryButtons(handlers.onOpenBattery);
 }
 
 export function renderBatteryDetails(battery, measurements, status, handlers) {
   setPageTitle(battery.archived ? "📦 Batterie archivée" : "🔋 Batterie");
   const measurementsWithRates = calculateMeasurementRates(measurements);
+  const estimatedText = status.estimatedLevelIsAvailable ? `≈ ${status.estimatedLevelPercent} %` : "≈ ?";
   app.innerHTML = `
-    <section class="card"><h2>${escapeHtml(battery.name)}</h2>${battery.archived ? `<p>${formatStatus(STATUS.UNINITIALIZED)} Archivée</p>` : ""}${battery.notes ? `<p class="helper-text">${escapeHtml(battery.notes)}</p>` : ""}</section>
-    <section class="card"><h3>Statut</h3><p>${battery.archived ? `<span class="badge badge-gray">📦 Archivée</span>` : formatStatus(status.status)}</p><p>Dernier niveau : <strong>${status.lastLevelPercent ?? "-"} %</strong></p><p>Dernière mesure : <strong>${formatRelativeDate(status.lastMeasurementDate)}</strong></p><p>Date seuil estimée : <strong>${status.estimatedThresholdDate ? formatRelativeDate(status.estimatedThresholdDate) : "Non calculable"}</strong></p><p>Confiance : <strong>${status.confidence}</strong></p></section>
+    <section class="card"><h2>${escapeHtml(battery.name)}</h2>${battery.archived ? `<p><span class="badge badge-gray">📦 Archivée</span></p>` : ""}${battery.notes ? `<p class="helper-text">${escapeHtml(battery.notes)}</p>` : ""}</section>
+    <section class="card"><h3>Statut</h3><p>${battery.archived ? `<span class="badge badge-gray">📦 Archivée</span>` : formatStatus(status.status)}</p><p>≈ Niveau actuel : <strong class="${statusClass(status.status)}">${estimatedText}</strong></p>${!status.estimatedLevelIsAvailable ? `<p class="helper-text">Pas assez de mesures pour estimer l'autodécharge.</p>` : ""}<p>Dernière mesure : <strong>${status.lastLevelPercent ?? "-"} %</strong> (${formatRelativeDate(status.lastMeasurementDate)})</p><p>Date seuil estimée : <strong>${status.estimatedThresholdDate ? formatRelativeDate(status.estimatedThresholdDate) : "Non calculable"}</strong></p><p>Confiance : <strong>${status.confidence}</strong></p></section>
     <section class="card"><h3>Statistiques</h3><p>Mesures : <strong>${status.measurementCount}</strong></p><p>Cycles : <strong>${status.cycleCount}</strong></p><p>Perte moyenne : <strong>${status.averageDischargePerDay.toFixed(3)} % / jour</strong></p></section>
     <section class="card"><h3>Historique</h3>${measurements.length === 0 ? `<p class="empty-state">Aucune mesure.</p>` : renderMeasurementHistory(measurementsWithRates)}</section>`;
   app.querySelectorAll("[data-measurement-id]").forEach(row => row.addEventListener("click", () => handlers.onEditMeasurement(row.dataset.measurementId)));
@@ -62,15 +72,18 @@ export function renderSettingsPage(settings, handlers) {
     <h3>Alertes</h3>
     <label>🟠 Seuil d'alerte (%)<input name="alertThresholdPercent" type="number" inputmode="numeric" min="0" max="100" step="1" value="${settings.alertThresholdPercent}" required></label>
     <label>🔴 Seuil critique (%)<input name="criticalThresholdPercent" type="number" inputmode="numeric" min="0" max="100" step="1" value="${settings.criticalThresholdPercent}" required></label>
-    <label>📅 Préalerte (jours avant échéance)<input name="prealertDays" type="number" inputmode="numeric" min="0" max="3650" step="1" value="${settings.prealertDays}" required></label>
-    <h3>À propos</h3><p class="helper-text">Version ${APP_VERSION}</p>
+    <h3>Apparence</h3>
+    <label>Thème<select name="theme"><option value="${THEMES.SYSTEM}">📱 Système</option><option value="${THEMES.LIGHT}">☀️ Clair</option><option value="${THEMES.DARK}">🌙 Sombre</option></select></label>
     <div class="action-row"><button class="button" type="submit">Enregistrer</button></div>
-  </form></section>`;
-  app.querySelector("#settings-form").addEventListener("submit", e => {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    handlers.onSave({ alertThresholdPercent: Number(data.get("alertThresholdPercent")), criticalThresholdPercent: Number(data.get("criticalThresholdPercent")), prealertDays: Number(data.get("prealertDays")) });
-  });
+  </form></section>
+  <section class="card"><h3>Données</h3><div class="action-row"><button id="export-json" class="button secondary-button" type="button">💾 Exporter JSON</button><label class="button secondary-button">📥 Importer JSON<input id="import-json-input" type="file" accept="application/json" hidden></label></div></section>
+  <section class="card"><h3>À propos</h3><button id="about-button" class="button secondary-button" type="button">Voir</button></section>`;
+  const form = app.querySelector("#settings-form");
+  form.theme.value = settings.theme;
+  form.addEventListener("submit", e => { e.preventDefault(); const data = new FormData(e.currentTarget); handlers.onSave({ alertThresholdPercent: Number(data.get("alertThresholdPercent")), criticalThresholdPercent: Number(data.get("criticalThresholdPercent")), theme: data.get("theme") }); });
+  app.querySelector("#export-json").onclick = handlers.onExportJson;
+  app.querySelector("#import-json-input").onchange = e => handlers.onImportJson(e.target.files?.[0]);
+  app.querySelector("#about-button").onclick = () => { openModal(`<h2>Battery Reminder</h2><p class="about-text">Aider à éviter les décharges profondes des batteries rarement utilisées en estimant leur autodécharge et en affichant un statut visuel.</p><p>Version : <strong>${APP_VERSION}</strong></p><div class="action-row"><button id="close-about" class="button secondary-button" type="button">Fermer</button></div>`); modalRoot.querySelector("#close-about").onclick = closeModal; };
 }
 
 export function openQuickMeasurementPicker(items, handlers) {
@@ -138,29 +151,18 @@ export function openAddMeasurementModal(battery, handlers, existingMeasurement =
   if (existingMeasurement) modalRoot.querySelector("#delete-measurement").onclick = () => handlers.onDelete(existingMeasurement);
   modalRoot.querySelector("#cancel-form").onclick = closeModal;
 }
-
-export function openSideMenu(handlers) {
-  sideMenu.hidden = false;
-  document.querySelector("#close-menu-button").onclick = closeSideMenu;
-  document.querySelector("#menu-dashboard").onclick = () => { closeSideMenu(); handlers.onDashboard(); };
-  document.querySelector("#menu-batteries").onclick = () => { closeSideMenu(); handlers.onBatteries(); };
-  document.querySelector("#menu-archives").onclick = () => { closeSideMenu(); handlers.onArchives(); };
-  document.querySelector("#menu-settings").onclick = () => { closeSideMenu(); handlers.onSettings(); };
-  document.querySelector("#menu-export-json").onclick = () => { closeSideMenu(); handlers.onExportJson(); };
-  document.querySelector("#menu-import-json").onclick = () => { closeSideMenu(); handlers.onImportJson(); };
-}
-export function closeSideMenu() { sideMenu.hidden = true; }
 export function closeModal() { modalRoot.innerHTML = ""; }
 
-function renderSortControl(id, value) { return `<div class="sort-row"><label>Trier par <select id="${id}"><option value="urgency">Urgence</option><option value="name">Nom</option><option value="lastMeasurement">Dernière mesure</option><option value="lastCharge">Dernière recharge</option><option value="status">Statut</option></select></label></div>`.replace(`value="${value}"`, `value="${value}" selected`); }
-function bindSort(selector, handler) { const select = app.querySelector(selector); select.value = select.id === "dashboard-sort" ? select.value : select.value; select.onchange = () => handler(select.value); }
+function renderSortControl(id, value) { return `<div class="sort-row"><label>Trier par <select id="${id}" data-current="${value}"><option value="urgency">Urgence</option><option value="name">Nom</option><option value="estimatedLevel">≈ % restant</option><option value="lastMeasurement">Dernière mesure</option><option value="lastCharge">Dernière recharge</option><option value="status">Statut</option></select></label></div>`; }
+function bindSort(selector, handler) { const select = app.querySelector(selector); select.value = select.dataset.current; select.onchange = () => handler(select.value); }
 function bindBatteryButtons(handler) { app.querySelectorAll("[data-battery-id]").forEach(btn => btn.addEventListener("click", () => handler(btn.dataset.batteryId))); }
-function renderBatteryList(items) { return `<div class="battery-list">${items.map(({battery,status}) => `<button class="battery-item" type="button" data-battery-id="${battery.id}"><span><span class="battery-name">${escapeHtml(battery.name)}</span><br><span class="battery-meta">${formatBatteryMeta(status)}</span></span><span>${battery.archived ? `<span class="badge badge-gray">📦 Archivée</span>` : formatStatus(status.status)}</span></button>`).join("")}</div>`; }
-function renderQuickBatteryList(items) { if (items.length === 0) return `<p class="empty-state">Aucune batterie trouvée.</p>`; return `<div class="battery-list">${items.map(({battery,status}) => `<button class="battery-item" type="button" data-battery-id="${battery.id}"><span><span class="battery-name">${escapeHtml(battery.name)}</span><br><span class="battery-meta">${status.lastLevelPercent === null ? "Non initialisée" : `${status.lastLevelPercent} % • ${formatRelativeDate(status.lastMeasurementDate)}`}</span></span><span>${battery.archived ? `<span class="badge badge-gray">📦 Archivée</span>` : formatStatus(status.status)}</span></button>`).join("")}</div>`; }
-function formatBatteryMeta(status) { if (status.lastLevelPercent === null) return "Non initialisée"; return `${status.lastLevelPercent} % • ${formatRelativeDate(status.lastMeasurementDate)}`; }
-function renderMeasurementHistory(measurementsWithRates) { const visible = measurementsWithRates.slice(-5).reverse(); return `${visible.map(m => `<div class="history-item" data-measurement-id="${m.id}"><span>${formatRelativeDate(m.date)}</span><strong>${m.levelPercent} %</strong><span class="history-rate">${m.rateLabel}</span></div>`).join("")}${measurementsWithRates.length > 5 ? `<p class="helper-text">5 dernières mesures affichées.</p>` : ""}`; }
+function renderBatteryList(items) { return `<div class="battery-list">${items.map(({battery,status}) => `<button class="battery-item" type="button" data-battery-id="${battery.id}"><span><span class="battery-name">${escapeHtml(battery.name)}</span><br><span class="battery-meta ${statusClass(status.status)}">${formatBatteryMeta(status)}</span></span><span>${battery.archived ? `<span class="badge badge-gray">📦 Archivée</span>` : formatStatus(status.status)}</span></button>`).join("")}</div>`; }
+function renderQuickBatteryList(items) { if (items.length === 0) return `<p class="empty-state">Aucune batterie trouvée.</p>`; return renderBatteryList(items); }
+function formatBatteryMeta(status) { if (!status.lastMeasurementDate) return "≈ ?"; const estimated = status.estimatedLevelIsAvailable ? `≈ ${status.estimatedLevelPercent} %` : "≈ ?"; return `${estimated} • ${formatRelativeDate(status.lastMeasurementDate)}`; }
+function renderMeasurementHistory(measurementsWithRates) { const visible = measurementsWithRates.slice(-5).reverse(); return `${visible.map(m => `<div class="history-item" data-measurement-id="${m.id}"><span>${m.date}</span><strong>${m.levelPercent} %</strong><span class="history-rate">${m.rateLabel}</span></div>`).join("")}${measurementsWithRates.length > 5 ? `<p class="helper-text">5 dernières mesures affichées.</p>` : ""}`; }
 function renderLedPreviewHtml(ledCount, behavior, sliderPosition) { const state = behavior === LED_BEHAVIORS.ADVANCED ? buildLedAdvancedState(ledCount, sliderPosition) : buildLedSimpleState(ledCount, sliderPosition); const leds = []; for (let i=0;i<state.solid;i++) leds.push(`<span class="led led-on"></span>`); for (let i=0;i<state.blinking;i++) leds.push(`<span class="led led-blink"></span>`); for (let i=0;i<state.off;i++) leds.push(`<span class="led led-off"></span>`); return leds.join(""); }
 function inputTypeFromBattery(battery) { if (!battery) return BATTERY_INPUT_TYPES.PERCENTAGE; if (battery.inputType) return battery.inputType; if (battery.ledConfig?.behavior === LED_BEHAVIORS.ADVANCED) return BATTERY_INPUT_TYPES.LED_ADVANCED; if (battery.ledConfig) return BATTERY_INPUT_TYPES.LED_SIMPLE; return BATTERY_INPUT_TYPES.PERCENTAGE; }
 function formatStatus(status) { switch(status) { case STATUS.RED: return `<span class="badge badge-red">🔴 À recharger</span>`; case STATUS.ORANGE: return `<span class="badge badge-orange">🟠 À surveiller</span>`; case STATUS.GREEN: return `<span class="badge badge-green">🟢 OK</span>`; default: return `<span class="badge badge-gray">⚪ Non initialisée</span>`; } }
+function statusClass(status) { switch(status) { case STATUS.RED: return "value-red"; case STATUS.ORANGE: return "value-orange"; case STATUS.GREEN: return "value-green"; default: return "value-gray"; } }
 function openModal(content) { modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal">${content}</div></div>`; }
 function escapeHtml(value) { return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
