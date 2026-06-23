@@ -4,27 +4,33 @@ BattTrack est une PWA pour suivre les batteries rarement utilisées, estimer leu
 
 ## Version
 
-v1.2.0
+v1.3.0
 
-## Changements v1.2.0
+## Changements v1.3.0
 
-- Ajout du bouton 🏠 permanent pour revenir au Tableau de bord.
-- Bouton ⚙️ conservé pour ouvrir les Paramètres en modale.
-- Paramètres et À propos avec bouton ✕ en haut à droite.
-- Suppression du bouton "Fermer" en bas des modales Paramètres et À propos.
-- Thème appliqué instantanément, sans bouton Enregistrer.
-- Seuils sauvegardés automatiquement au changement.
-- Thème par défaut conservé sur "📱 Système".
-- Menu action rapide avec icônes :
-  - 📈 Ajouter une mesure
-  - 🔋 Rechargé à 100 %
-  - ➕ Créer une batterie
-  - ❌ Annuler
-- Bouton ← Tableau de bord dans les fiches batterie et Archives.
-- Icônes PWA refaites sur fond sombre.
-- Ajout des icônes PWA maskable Android.
-- Nettoyage des assets inutilisés.
-- Service Worker mis à jour en v1.2.
+- Tableau de bord utilisable comme filtre :
+  - Actives
+  - À recharger
+  - À surveiller
+  - OK
+  - Non initialisée
+  - Archivées ouvre la page Archives
+- Filtre actif visible et compatible avec la recherche.
+- Logo agrandi dans les assets PWA.
+- Apparence remise dans un menu déroulant :
+  - 📱 Système
+  - ☀️ Clair
+  - 🌙 Sombre
+- Suppression du bouton "← Tableau de bord" dans les fiches batteries.
+- Modales d'actions avec croix ✕ en haut à droite.
+- Suppression du bouton "❌ Annuler" en bas des modales d'action rapide.
+- Notifications locales simples :
+  - option activable dans Paramètres
+  - demande d'autorisation système
+  - notification quand une batterie est à recharger
+  - anti-spam par batterie
+- Ajout du bouton "🔄 Vérifier mise à jour" dans Paramètres.
+- Service Worker mis à jour en v1.3.
 
 ## Licence
 
@@ -35,14 +41,3 @@ Code source disponible sur GitHub. Tous droits réservés.
 - Projet : https://github.com/legacjeremy/BattTrack
 - Signaler un bug : https://github.com/legacjeremy/BattTrack/issues/new?labels=bug
 - Proposer une amélioration : https://github.com/legacjeremy/BattTrack/issues/new?labels=enhancement
-
-## Backlog validé
-
-- Détection et confirmation des mesures aberrantes.
-- Graphique d'autodécharge.
-- Notifications PWA.
-- Meilleure gestion des conversions LED vers pourcentage.
-- Détail avancé des cycles.
-- Export CSV.
-- Synchronisation optionnelle multi-appareils.
-- QR Code / NFC par batterie.

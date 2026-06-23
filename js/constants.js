@@ -1,6 +1,6 @@
 export const DB_NAME = "BattTrackDB";
 export const DB_VERSION = 1;
-export const APP_VERSION = "1.2.0";
+export const APP_VERSION = "1.3.0";
 
 export const STORE_NAMES = { BATTERIES: "batteries", MEASUREMENTS: "measurements", SETTINGS: "settings", METADATA: "metadata" };
 export const INPUT_MODES = { PERCENTAGE: "percentage", LED: "led" };
@@ -12,3 +12,5 @@ export const DASHBOARD_SORTS = { URGENCY: "urgency", NAME: "name", ESTIMATED_LEV
 export const STATUS = { UNINITIALIZED: "uninitialized", RED: "red", ORANGE: "orange", GREEN: "green" };
 export const VIEWS = { DASHBOARD: "dashboard", BATTERIES: "batteries", BATTERY_DETAILS: "battery-details", ARCHIVES: "archives", ARCHIVED_BATTERY_DETAILS: "archived-battery-details", SETTINGS: "settings" };
 export const THEMES = { LIGHT: "light", DARK: "dark", SYSTEM: "system" };
+
+export const DASHBOARD_FILTERS = { ALL: "all", RED: "red", ORANGE: "orange", GREEN: "green", UNINITIALIZED: "uninitialized" };

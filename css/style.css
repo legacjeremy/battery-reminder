@@ -592,3 +592,55 @@ textarea {
   background: #334155;
   color: #F8FAFC;
 }
+
+
+/* BattTrack v1.3 */
+.summary-filter-button {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.summary-filter-button.active {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  transform: translateY(-1px);
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-title-row h2 {
+  margin: 0;
+}
+
+.compact-button {
+  padding: 0.55rem 0.75rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 750;
+}
+
+.checkbox-row input {
+  width: auto;
+  min-width: auto;
+}
+
+.settings-grid select,
+.sort-row select {
+  appearance: auto;
+}
+
+.notification-hint {
+  font-size: 0.9rem;
+  color: var(--muted);
+}

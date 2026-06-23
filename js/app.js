@@ -4,17 +4,27 @@ import { createChargeMeasurement, createLedMeasurement, createPercentageMeasurem
 import { calculateBatteryStatus, sortBatteryStatusItems } from "./calculation.js";
 import { renderDashboard, renderArchivesPage, renderBatteryDetails, openSettingsModal, openBatteryFormModal, openAddMeasurementModal, openQuickMeasurementPicker, openBatteryActionModal, openArchivesDeletePicker, openDashboardActionModal, closeModal, setFabVisible } from "./ui.js";
 import { downloadJsonBackup, readJsonBackup, replaceWithImportedData } from "./import-export.js";
-import { INPUT_MODES, VIEWS, THEMES } from "./constants.js";
+import { INPUT_MODES, VIEWS, THEMES, STATUS, DASHBOARD_FILTERS } from "./constants.js";
 import { updateSettings } from "./settings.js";
 
-let state = { batteries: [], settings: null, statuses: [], view: VIEWS.DASHBOARD, currentBatteryId: null };
+let state = {
+  batteries: [],
+  settings: null,
+  statuses: [],
+  view: VIEWS.DASHBOARD,
+  currentBatteryId: null,
+  dashboardFilter: DASHBOARD_FILTERS.ALL
+};
+
+let swRegistration = null;
 
 async function main() {
-  await registerServiceWorker();
+  swRegistration = await registerServiceWorker();
   await initDb();
   await reloadState();
   applyTheme(state.settings.theme);
   renderDashboardView();
+  await checkCriticalNotifications();
 
   document.querySelector("#floating-action-button").addEventListener("click", handleFabClick);
   document.querySelector("#settings-button").addEventListener("click", openSettingsView);
@@ -59,9 +69,10 @@ function renderDashboardView() {
   state.currentBatteryId = null;
   setFabVisible(true);
 
-  renderDashboard(activeSorted(state.settings.dashboardSort), state.settings, getArchivedCount(), {
+  renderDashboard(activeSorted(state.settings.dashboardSort), state.settings, getArchivedCount(), state.dashboardFilter, {
     onOpenBattery: openBatteryDetails,
     onSortChange: handleDashboardSort,
+    onFilterChange: handleDashboardFilter,
     onArchives: renderArchivesView
   });
 }
@@ -80,6 +91,7 @@ function renderArchivesView() {
 function openSettingsView() {
   openSettingsModal(state.settings, {
     onSave: handleSettingsSave,
+    onCheckUpdate: handleCheckUpdate,
     onExportJson: downloadJsonBackup,
     onImportJson: handleImportFile
   });
@@ -95,8 +107,7 @@ async function openBatteryDetails(id) {
   setFabVisible(true);
 
   renderBatteryDetails(battery, measurements, status, {
-    onEditMeasurement: (measurementId) => openEditMeasurement(battery, measurements.find(m => m.id === measurementId)),
-    onBack: renderDashboardView
+    onEditMeasurement: (measurementId) => openEditMeasurement(battery, measurements.find(m => m.id === measurementId))
   });
 }
 
@@ -107,14 +118,58 @@ async function handleDashboardSort(sort) {
   renderDashboardView();
 }
 
+function handleDashboardFilter(filter) {
+  state.dashboardFilter = filter;
+  renderDashboardView();
+}
+
 async function handleSettingsSave(updates) {
+  const wantsNotifications = updates.notificationsEnabled && !state.settings.notificationsEnabled;
+
+  if (wantsNotifications) {
+    const allowed = await requestNotificationPermission();
+    if (!allowed) {
+      updates.notificationsEnabled = false;
+      alert("Les notifications n'ont pas été autorisées.");
+    }
+  }
+
   state.settings = updateSettings(state.settings, updates);
   await saveSettings(state.settings);
   applyTheme(state.settings.theme);
   await reloadState();
 
-  // Keep the settings modal open and refresh its active state.
   openSettingsView();
+  await checkCriticalNotifications();
+}
+
+async function handleCheckUpdate() {
+  if (!("serviceWorker" in navigator)) {
+    alert("Les mises à jour automatiques ne sont pas disponibles sur ce navigateur.");
+    return;
+  }
+
+  try {
+    const registration = swRegistration ?? await navigator.serviceWorker.getRegistration("./");
+
+    if (!registration) {
+      alert("Service worker non trouvé. Recharge l'application puis réessaie.");
+      return;
+    }
+
+    await registration.update();
+
+    if (registration.waiting) {
+      showUpdateAvailableBanner(registration);
+      closeModal();
+      return;
+    }
+
+    alert("BattTrack est déjà à jour.");
+  } catch (error) {
+    console.warn("Vérification de mise à jour impossible", error);
+    alert("Impossible de vérifier les mises à jour pour le moment.");
+  }
 }
 
 function handleFabClick() {
@@ -129,7 +184,7 @@ function handleFabClick() {
       onCreateBattery: () => openBatteryFormModal({ onSave: handleCreateBattery }),
       onQuickCharge: () => openQuickMeasurementPicker(activeSorted(state.settings.dashboardSort), {
         onSelectBattery: b => handleAddCharge(b.id)
-      }, "Rechargé à 100 % rapide")
+      }, "Rechargé à 100 %")
     });
   }
 
@@ -168,6 +223,7 @@ function openEditMeasurement(battery, measurement) {
         closeModal();
         await reloadState();
         await openBatteryDetails(battery.id);
+        await checkCriticalNotifications();
       }
     }
   }, measurement);
@@ -179,12 +235,14 @@ async function handleCreateBattery(data) {
   closeModal();
   await reloadState();
   renderDashboardView();
+  await checkCriticalNotifications();
 }
 
 async function handleUpdateBattery(battery, data) {
   await saveBattery(updateBattery(battery, data));
   await reloadState();
   await openBatteryDetails(battery.id);
+  await checkCriticalNotifications();
 }
 
 async function handleArchiveBattery(battery) {
@@ -193,6 +251,7 @@ async function handleArchiveBattery(battery) {
   closeModal();
   await reloadState();
   renderDashboardView();
+  await checkCriticalNotifications();
 }
 
 async function handleRestoreBattery(battery) {
@@ -200,6 +259,7 @@ async function handleRestoreBattery(battery) {
   closeModal();
   await reloadState();
   await openBatteryDetails(battery.id);
+  await checkCriticalNotifications();
 }
 
 async function handleDeleteBatteryById(id) {
@@ -211,6 +271,7 @@ async function handleDeleteBatteryById(id) {
   closeModal();
   await reloadState();
   renderArchivesView();
+  await checkCriticalNotifications();
 }
 
 async function handleAddCharge(id) {
@@ -223,6 +284,8 @@ async function handleAddCharge(id) {
   } else {
     renderDashboardView();
   }
+
+  await checkCriticalNotifications();
 }
 
 async function handleCreateMeasurement(battery, data) {
@@ -235,6 +298,7 @@ async function handleCreateMeasurement(battery, data) {
   await saveMeasurement(measurement);
   await reloadState();
   await openBatteryDetails(battery.id);
+  await checkCriticalNotifications();
 }
 
 async function handleImportFile(file) {
@@ -246,10 +310,75 @@ async function handleImportFile(file) {
   await reloadState();
   closeModal();
   renderDashboardView();
+  await checkCriticalNotifications();
+}
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const permission = await Notification.requestPermission();
+  return permission === "granted";
+}
+
+async function checkCriticalNotifications() {
+  if (!state.settings?.notificationsEnabled || !state.settings?.notifyOnCritical) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const history = { ...(state.settings.notificationHistory ?? {}) };
+  let changed = false;
+
+  for (const item of state.statuses) {
+    const battery = item.battery;
+    const status = item.status;
+
+    if (battery.archived) {
+      if (history[battery.id]) {
+        delete history[battery.id];
+        changed = true;
+      }
+      continue;
+    }
+
+    if (status.status === STATUS.RED) {
+      if (!history[battery.id]) {
+        showBatteryCriticalNotification(battery, status);
+        history[battery.id] = true;
+        changed = true;
+      }
+    } else if (history[battery.id]) {
+      delete history[battery.id];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    state.settings = updateSettings(state.settings, { notificationHistory: history });
+    await saveSettings(state.settings);
+  }
+}
+
+function showBatteryCriticalNotification(battery, status) {
+  const level = status.estimatedLevelIsAvailable ? `estimée à ${status.estimatedLevelPercent} %` : "à recharger";
+
+  const title = "🔋 Batterie à recharger";
+  const options = {
+    body: `${battery.name} est ${level}.`,
+    icon: "assets/icon-192.png",
+    badge: "assets/icon-192-maskable.png",
+    tag: `batttrack-critical-${battery.id}`,
+    renotify: false
+  };
+
+  if (swRegistration?.showNotification) {
+    swRegistration.showNotification(title, options);
+  } else {
+    new Notification(title, options);
+  }
 }
 
 async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
+  if (!("serviceWorker" in navigator)) return null;
 
   try {
     const registration = await navigator.serviceWorker.register("./service-worker.js");
@@ -268,8 +397,11 @@ async function registerServiceWorker() {
         }
       });
     });
+
+    return registration;
   } catch (error) {
     console.warn("Service worker non enregistré", error);
+    return null;
   }
 }
 

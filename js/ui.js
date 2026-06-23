@@ -1,4 +1,4 @@
-import { APP_VERSION, BATTERY_INPUT_TYPES, INPUT_MODES, LED_BEHAVIORS, STATUS, DASHBOARD_SORTS, THEMES } from "./constants.js";
+import { APP_VERSION, BATTERY_INPUT_TYPES, INPUT_MODES, LED_BEHAVIORS, STATUS, THEMES, DASHBOARD_FILTERS } from "./constants.js";
 import { buildLedAdvancedState, buildLedSimpleState, convertLedAdvancedToPercent, convertLedSimpleToPercent, getLedSliderPositionFromPercent } from "./measurement.js";
 import { calculateMeasurementRates, formatRelativeDate } from "./calculation.js";
 
@@ -15,7 +15,7 @@ export function setFabVisible(visible) {
   document.querySelector("#floating-action-button").hidden = !visible;
 }
 
-export function renderDashboard(items, settings, archivedCount, handlers) {
+export function renderDashboard(items, settings, archivedCount, activeFilter, handlers) {
   setPageTitle("Tableau de bord");
 
   const active = items.filter(i => !i.battery.archived);
@@ -23,22 +23,27 @@ export function renderDashboard(items, settings, archivedCount, handlers) {
   const orange = active.filter(i => i.status.status === STATUS.ORANGE);
   const green = active.filter(i => i.status.status === STATUS.GREEN);
   const uninit = active.filter(i => i.status.status === STATUS.UNINITIALIZED);
+  const filtered = filterItems(active, activeFilter);
 
   app.innerHTML = `
     <section class="card dashboard-summary">
       <h2>Tableau de bord</h2>
       <div class="status-row">
-        <div><span class="badge badge-gray">🔋 Actives : ${active.length}</span></div>
-        <div><span class="badge badge-red"><img class="status-icon" src="assets/icons/status/critical.svg" alt=""> À recharger : ${red.length}</span></div>
-        <div><span class="badge badge-orange"><img class="status-icon" src="assets/icons/status/warning.svg" alt=""> À surveiller : ${orange.length}</span></div>
-        <div><span class="badge badge-green"><img class="status-icon" src="assets/icons/status/ok.svg" alt=""> OK : ${green.length}</span></div>
-        <div><span class="badge badge-gray"><img class="status-icon" src="assets/icons/status/unknown.svg" alt=""> Non initialisée : ${uninit.length}</span></div>
-        <div><span class="badge badge-gray">📦 Archivées : ${archivedCount}</span></div>
+        ${renderSummaryButton(DASHBOARD_FILTERS.ALL, activeFilter, "badge-gray", `🔋 Actives : ${active.length}`)}
+        ${renderSummaryButton(DASHBOARD_FILTERS.RED, activeFilter, "badge-red", `<img class="status-icon" src="assets/icons/status/critical.svg" alt=""> À recharger : ${red.length}`)}
+        ${renderSummaryButton(DASHBOARD_FILTERS.ORANGE, activeFilter, "badge-orange", `<img class="status-icon" src="assets/icons/status/warning.svg" alt=""> À surveiller : ${orange.length}`)}
+        ${renderSummaryButton(DASHBOARD_FILTERS.GREEN, activeFilter, "badge-green", `<img class="status-icon" src="assets/icons/status/ok.svg" alt=""> OK : ${green.length}`)}
+        ${renderSummaryButton(DASHBOARD_FILTERS.UNINITIALIZED, activeFilter, "badge-gray", `<img class="status-icon" src="assets/icons/status/unknown.svg" alt=""> Non initialisée : ${uninit.length}`)}
+        <button class="badge badge-gray summary-filter-button" type="button" data-open-archives>📦 Archivées : ${archivedCount}</button>
       </div>
     </section>
 
     <section class="card">
-      <h2>Batteries</h2>
+      <div class="section-title-row">
+        <h2>${batterySectionTitle(activeFilter)}</h2>
+        ${activeFilter !== DASHBOARD_FILTERS.ALL ? `<button id="clear-dashboard-filter" class="button secondary-button compact-button" type="button">✕ Effacer</button>` : ""}
+      </div>
+
       ${renderSortControl("dashboard-sort", settings.dashboardSort)}
 
       <label class="search-box">
@@ -47,7 +52,7 @@ export function renderDashboard(items, settings, archivedCount, handlers) {
       </label>
 
       <div id="battery-list-zone">
-        ${active.length === 0 ? `<p class="empty-state">Aucune batterie active.</p>` : renderBatteryList(active)}
+        ${filtered.length === 0 ? `<p class="empty-state">Aucune batterie dans ce filtre.</p>` : renderBatteryList(filtered)}
       </div>
 
       <div class="archives-link">
@@ -63,14 +68,26 @@ export function renderDashboard(items, settings, archivedCount, handlers) {
 
   search.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
-    const filtered = active.filter(i => i.battery.name.toLowerCase().includes(q));
-    zone.innerHTML = filtered.length ? renderBatteryList(filtered) : `<p class="empty-state">Aucune batterie trouvée.</p>`;
+    const searched = filtered.filter(i => i.battery.name.toLowerCase().includes(q));
+    zone.innerHTML = searched.length ? renderBatteryList(searched) : `<p class="empty-state">Aucune batterie trouvée.</p>`;
     bind();
   });
 
   bind();
   bindSort("#dashboard-sort", handlers.onSortChange);
+
+  app.querySelectorAll("[data-dashboard-filter]").forEach(button => {
+    button.addEventListener("click", () => handlers.onFilterChange(button.dataset.dashboardFilter));
+  });
+
+  app.querySelectorAll("[data-open-archives]").forEach(button => {
+    button.addEventListener("click", handlers.onArchives);
+  });
+
   app.querySelector("#open-archives").onclick = handlers.onArchives;
+
+  const clear = app.querySelector("#clear-dashboard-filter");
+  if (clear) clear.onclick = () => handlers.onFilterChange(DASHBOARD_FILTERS.ALL);
 }
 
 export function renderArchivesPage(items, handlers) {
@@ -97,10 +114,6 @@ export function renderBatteryDetails(battery, measurements, status, handlers) {
   const estimatedText = status.estimatedLevelIsAvailable ? `≈ ${status.estimatedLevelPercent} %` : "≈ ?";
 
   app.innerHTML = `
-    <div class="back-button-row">
-      <button id="back-dashboard" class="back-button" type="button">← Tableau de bord</button>
-    </div>
-
     <section class="card">
       <h2>${escapeHtml(battery.name)}</h2>
       ${battery.archived ? `<p><span class="badge badge-gray">📦 Archivée</span></p>` : ""}
@@ -130,7 +143,6 @@ export function renderBatteryDetails(battery, measurements, status, handlers) {
     </section>
   `;
 
-  app.querySelector("#back-dashboard").onclick = handlers.onBack;
   app.querySelectorAll("[data-measurement-id]").forEach(row => row.addEventListener("click", () => handlers.onEditMeasurement(row.dataset.measurementId)));
 }
 
@@ -147,11 +159,31 @@ export function openSettingsModal(settings, handlers) {
 
       <section class="settings-section">
         <h3>Apparence</h3>
-        <div class="theme-choice-row">
-          <button class="theme-choice ${settings.theme === THEMES.SYSTEM ? "active" : ""}" data-theme-choice="${THEMES.SYSTEM}" type="button">📱 Système <span class="helper-text">(recommandé)</span></button>
-          <button class="theme-choice ${settings.theme === THEMES.LIGHT ? "active" : ""}" data-theme-choice="${THEMES.LIGHT}" type="button">☀️ Clair</button>
-          <button class="theme-choice ${settings.theme === THEMES.DARK ? "active" : ""}" data-theme-choice="${THEMES.DARK}" type="button">🌙 Sombre</button>
-        </div>
+        <label>Thème
+          <select id="theme-select">
+            <option value="${THEMES.SYSTEM}">📱 Système</option>
+            <option value="${THEMES.LIGHT}">☀️ Clair</option>
+            <option value="${THEMES.DARK}">🌙 Sombre</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3>Notifications</h3>
+        <label class="checkbox-row">
+          <input id="notifications-enabled" type="checkbox" ${settings.notificationsEnabled ? "checked" : ""}>
+          <span>Activer les notifications locales</span>
+        </label>
+        <label class="checkbox-row">
+          <input id="notify-critical" type="checkbox" ${settings.notifyOnCritical ? "checked" : ""}>
+          <span>Me prévenir quand une batterie est à recharger</span>
+        </label>
+        <p class="helper-text">Les notifications sont vérifiées au lancement de l'application et après les changements de données.</p>
+      </section>
+
+      <section class="settings-section">
+        <h3>Application</h3>
+        <button id="check-update-button" class="button secondary-button" type="button">🔄 Vérifier mise à jour</button>
       </section>
 
       <section class="settings-section">
@@ -171,25 +203,24 @@ export function openSettingsModal(settings, handlers) {
 
   modalRoot.querySelector("#close-settings").onclick = closeModal;
 
-  const saveThresholds = () => handlers.onSave({
+  const themeSelect = modalRoot.querySelector("#theme-select");
+  themeSelect.value = settings.theme;
+
+  const buildUpdates = () => ({
     alertThresholdPercent: Number(modalRoot.querySelector("#alert-threshold").value),
     criticalThresholdPercent: Number(modalRoot.querySelector("#critical-threshold").value),
-    theme: settings.theme
+    theme: themeSelect.value,
+    notificationsEnabled: modalRoot.querySelector("#notifications-enabled").checked,
+    notifyOnCritical: modalRoot.querySelector("#notify-critical").checked
   });
 
-  modalRoot.querySelector("#alert-threshold").addEventListener("change", saveThresholds);
-  modalRoot.querySelector("#critical-threshold").addEventListener("change", saveThresholds);
+  modalRoot.querySelector("#alert-threshold").addEventListener("change", () => handlers.onSave(buildUpdates()));
+  modalRoot.querySelector("#critical-threshold").addEventListener("change", () => handlers.onSave(buildUpdates()));
+  themeSelect.addEventListener("change", () => handlers.onSave(buildUpdates()));
+  modalRoot.querySelector("#notifications-enabled").addEventListener("change", () => handlers.onSave(buildUpdates()));
+  modalRoot.querySelector("#notify-critical").addEventListener("change", () => handlers.onSave(buildUpdates()));
 
-  modalRoot.querySelectorAll("[data-theme-choice]").forEach(button => {
-    button.addEventListener("click", () => {
-      handlers.onSave({
-        alertThresholdPercent: Number(modalRoot.querySelector("#alert-threshold").value),
-        criticalThresholdPercent: Number(modalRoot.querySelector("#critical-threshold").value),
-        theme: button.dataset.themeChoice
-      });
-    });
-  });
-
+  modalRoot.querySelector("#check-update-button").onclick = handlers.onCheckUpdate;
   modalRoot.querySelector("#export-json").onclick = handlers.onExportJson;
   modalRoot.querySelector("#import-json-input").onchange = e => handlers.onImportJson(e.target.files?.[0]);
   modalRoot.querySelector("#about-button").onclick = () => openAboutModal();
@@ -232,34 +263,34 @@ export function openAboutModal() {
 
 export function openDashboardActionModal(handlers) {
   openModal(`
-    <h2>Action rapide</h2>
+    ${renderModalHeader("Action rapide", "close-action")}
     <div class="action-column">
       <button id="quick-add-measurement" class="button" type="button">📈 Ajouter une mesure</button>
       <button id="quick-charge" class="button secondary-button" type="button">🔋 Rechargé à 100 %</button>
       <button id="quick-create-battery" class="button secondary-button" type="button">➕ Créer une batterie</button>
-      <div class="quick-action-divider"></div>
-      <button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button>
     </div>
   `);
 
+  modalRoot.querySelector("#close-action").onclick = closeModal;
   modalRoot.querySelector("#quick-add-measurement").onclick = handlers.onAddMeasurement;
   modalRoot.querySelector("#quick-charge").onclick = handlers.onQuickCharge;
   modalRoot.querySelector("#quick-create-battery").onclick = handlers.onCreateBattery;
-  modalRoot.querySelector("#cancel-form").onclick = closeModal;
 }
 
 export function openQuickMeasurementPicker(items, handlers, title = "Ajouter une mesure") {
   const active = items.filter(i => !i.battery.archived);
 
   openModal(`
-    <h2>${title}</h2>
+    ${renderModalHeader(title, "close-picker")}
     <label class="search-box">Rechercher<input id="battery-search" type="search" placeholder="DJI, laser, trottinette..."></label>
     <div id="quick-battery-list">${renderQuickBatteryList(active)}</div>
-    <div class="action-row"><button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button></div>
   `);
+
+  modalRoot.querySelector("#close-picker").onclick = closeModal;
 
   const search = modalRoot.querySelector("#battery-search");
   const list = modalRoot.querySelector("#quick-battery-list");
+
   const bind = () => list.querySelectorAll("[data-battery-id]").forEach(btn => btn.addEventListener("click", () => handlers.onSelectBattery(active.find(i => i.battery.id === btn.dataset.batteryId).battery)));
 
   search.addEventListener("input", () => {
@@ -269,16 +300,19 @@ export function openQuickMeasurementPicker(items, handlers, title = "Ajouter une
   });
 
   bind();
-  modalRoot.querySelector("#cancel-form").addEventListener("click", closeModal);
 }
 
 export function openBatteryActionModal(battery, handlers) {
   const isArchived = battery.archived;
 
-  openModal(`<h2>${escapeHtml(battery.name)}</h2><div class="action-column">
-    ${isArchived ? `<button id="restore-battery" class="button" type="button">↩️ Restaurer</button><button id="delete-battery" class="button danger-button" type="button">🗑️ Supprimer définitivement</button>` : `<button id="add-measurement" class="button" type="button">📈 Ajouter une mesure</button><button id="add-charge" class="button secondary-button" type="button">🔋 Rechargé à 100 %</button><button id="edit-battery" class="button secondary-button" type="button">✏️ Modifier la batterie</button><button id="archive-battery" class="button warning-button" type="button">📦 Archiver la batterie</button>`}
-    <div class="quick-action-divider"></div>
-    <button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button></div>`);
+  openModal(`
+    ${renderModalHeader(escapeHtml(battery.name), "close-battery-action")}
+    <div class="action-column">
+      ${isArchived ? `<button id="restore-battery" class="button" type="button">↩️ Restaurer</button><button id="delete-battery" class="button danger-button" type="button">🗑️ Supprimer définitivement</button>` : `<button id="add-measurement" class="button" type="button">📈 Ajouter une mesure</button><button id="add-charge" class="button secondary-button" type="button">🔋 Rechargé à 100 %</button><button id="edit-battery" class="button secondary-button" type="button">✏️ Modifier la batterie</button><button id="archive-battery" class="button warning-button" type="button">📦 Archiver la batterie</button>`}
+    </div>
+  `);
+
+  modalRoot.querySelector("#close-battery-action").onclick = closeModal;
 
   if (isArchived) {
     modalRoot.querySelector("#restore-battery").onclick = handlers.onRestore;
@@ -289,28 +323,35 @@ export function openBatteryActionModal(battery, handlers) {
     modalRoot.querySelector("#edit-battery").onclick = handlers.onEdit;
     modalRoot.querySelector("#archive-battery").onclick = handlers.onArchive;
   }
-
-  modalRoot.querySelector("#cancel-form").onclick = closeModal;
 }
 
 export function openArchivesDeletePicker(items, handlers) {
   const archived = items.filter(i => i.battery.archived);
 
-  openModal(`<h2>Supprimer définitivement</h2>${archived.length === 0 ? `<p class="empty-state">Aucune batterie archivée.</p>` : renderQuickBatteryList(archived)}<div class="action-row"><button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button></div>`);
+  openModal(`
+    ${renderModalHeader("Supprimer définitivement", "close-archive-delete")}
+    ${archived.length === 0 ? `<p class="empty-state">Aucune batterie archivée.</p>` : renderQuickBatteryList(archived)}
+  `);
 
+  modalRoot.querySelector("#close-archive-delete").onclick = closeModal;
   modalRoot.querySelectorAll("[data-battery-id]").forEach(btn => btn.addEventListener("click", () => handlers.onDeleteBattery(btn.dataset.batteryId)));
-  modalRoot.querySelector("#cancel-form").onclick = closeModal;
 }
 
 export function openBatteryFormModal(handlers, battery = null) {
   const inputType = battery?.inputType ?? inputTypeFromBattery(battery);
 
-  openModal(`<h2>${battery ? "Modifier batterie" : "Créer batterie"}</h2><form id="battery-form" class="form-grid">
-    <label>Nom<input name="name" type="text" value="${escapeHtml(battery?.name ?? "")}" required></label>
-    <label>Mode de saisie<select name="inputType"><option value="percentage">Pourcentage</option><option value="led_simple">LEDs fixes</option><option value="led_advanced">LEDs fixes + clignotantes</option></select></label>
-    <div id="led-config-section"><label>Configuration LEDs<div id="led-config-preview" class="led-preview"></div><input id="led-count-slider" name="ledCount" type="range" min="2" max="6" step="1" value="${battery?.ledConfig?.ledCount ?? 4}"><span class="helper-text"><span id="led-count-label">${battery?.ledConfig?.ledCount ?? 4}</span> LEDs</span></label></div>
-    <label>Notes<textarea name="notes">${escapeHtml(battery?.notes ?? "")}</textarea></label>
-    <div class="action-row"><button class="button" type="submit">Enregistrer</button><button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button></div></form>`);
+  openModal(`
+    ${renderModalHeader(battery ? "Modifier batterie" : "Créer batterie", "close-battery-form")}
+    <form id="battery-form" class="form-grid">
+      <label>Nom<input name="name" type="text" value="${escapeHtml(battery?.name ?? "")}" required></label>
+      <label>Mode de saisie<select name="inputType"><option value="percentage">Pourcentage</option><option value="led_simple">LEDs fixes</option><option value="led_advanced">LEDs fixes + clignotantes</option></select></label>
+      <div id="led-config-section"><label>Configuration LEDs<div id="led-config-preview" class="led-preview"></div><input id="led-count-slider" name="ledCount" type="range" min="2" max="6" step="1" value="${battery?.ledConfig?.ledCount ?? 4}"><span class="helper-text"><span id="led-count-label">${battery?.ledConfig?.ledCount ?? 4}</span> LEDs</span></label></div>
+      <label>Notes<textarea name="notes">${escapeHtml(battery?.notes ?? "")}</textarea></label>
+      <div class="action-row"><button class="button" type="submit">Enregistrer</button><button id="cancel-form" class="button secondary-button" type="button">Annuler</button></div>
+    </form>
+  `);
+
+  modalRoot.querySelector("#close-battery-form").onclick = closeModal;
 
   const form = modalRoot.querySelector("#battery-form");
   const section = modalRoot.querySelector("#led-config-section");
@@ -364,11 +405,17 @@ export function openAddMeasurementModal(battery, handlers, existingMeasurement =
   const initialPosition = existingMeasurement?.observation?.sliderPosition ?? maxPosition;
   const initialPercent = existingMeasurement?.levelPercent ?? (behavior === LED_BEHAVIORS.ADVANCED ? convertLedAdvancedToPercent(ledCount, initialPosition) : convertLedSimpleToPercent(ledCount, initialPosition));
 
-  openModal(`<h2>${existingMeasurement ? "Modifier mesure" : "Ajouter mesure"}</h2><form id="measurement-form" class="form-grid">
-    <label>Date<input name="date" type="date" value="${existingMeasurement?.date ?? new Date().toISOString().slice(0,10)}" required></label>
-    ${isLed ? `<div><div id="led-preview" class="led-preview"></div><input id="led-slider" name="sliderPosition" type="range" min="0" max="${maxPosition}" step="1" value="${initialPosition}"></div>` : ""}
-    <label>Pourcentage<input name="levelPercent" type="number" inputmode="numeric" min="0" max="100" step="1" value="${initialPercent}" required></label>
-    <div class="action-row"><button class="button" type="submit">Enregistrer</button>${existingMeasurement ? `<button id="delete-measurement" class="button danger-button" type="button">Supprimer</button>` : ""}<button id="cancel-form" class="button secondary-button" type="button">❌ Annuler</button></div></form>`);
+  openModal(`
+    ${renderModalHeader(existingMeasurement ? "Modifier mesure" : "Ajouter mesure", "close-measurement-form")}
+    <form id="measurement-form" class="form-grid">
+      <label>Date<input name="date" type="date" value="${existingMeasurement?.date ?? new Date().toISOString().slice(0,10)}" required></label>
+      ${isLed ? `<div><div id="led-preview" class="led-preview"></div><input id="led-slider" name="sliderPosition" type="range" min="0" max="${maxPosition}" step="1" value="${initialPosition}"></div>` : ""}
+      <label>Pourcentage<input name="levelPercent" type="number" inputmode="numeric" min="0" max="100" step="1" value="${initialPercent}" required></label>
+      <div class="action-row"><button class="button" type="submit">Enregistrer</button>${existingMeasurement ? `<button id="delete-measurement" class="button danger-button" type="button">Supprimer</button>` : ""}<button id="cancel-form" class="button secondary-button" type="button">Annuler</button></div>
+    </form>
+  `);
+
+  modalRoot.querySelector("#close-measurement-form").onclick = closeModal;
 
   const form = modalRoot.querySelector("#measurement-form");
   const slider = modalRoot.querySelector("#led-slider");
@@ -416,6 +463,30 @@ export function openAddMeasurementModal(battery, handlers, existingMeasurement =
 
 export function closeModal() {
   modalRoot.innerHTML = "";
+}
+
+function renderSummaryButton(filter, activeFilter, badgeClass, content) {
+  return `<button class="badge ${badgeClass} summary-filter-button ${activeFilter === filter ? "active" : ""}" type="button" data-dashboard-filter="${filter}">${content}</button>`;
+}
+
+function filterItems(items, activeFilter) {
+  if (!activeFilter || activeFilter === DASHBOARD_FILTERS.ALL) return items;
+  return items.filter(i => i.status.status === activeFilter);
+}
+
+function batterySectionTitle(activeFilter) {
+  switch (activeFilter) {
+    case DASHBOARD_FILTERS.RED:
+      return "Batteries - À recharger";
+    case DASHBOARD_FILTERS.ORANGE:
+      return "Batteries - À surveiller";
+    case DASHBOARD_FILTERS.GREEN:
+      return "Batteries - OK";
+    case DASHBOARD_FILTERS.UNINITIALIZED:
+      return "Batteries - Non initialisées";
+    default:
+      return "Batteries";
+  }
 }
 
 function renderModalHeader(title, closeId) {
