@@ -15,6 +15,8 @@ export class Settings {
     this.notificationsEnabled = data.notificationsEnabled ?? false;
     this.notifyOnCritical = data.notifyOnCritical ?? true;
     this.notificationHistory = data.notificationHistory ?? {};
+    this.lastExportAt = data.lastExportAt ?? null;
+    this.installPromptDismissedAt = data.installPromptDismissedAt ?? null;
 
     this.createdAt = data.createdAt ?? now;
     this.updatedAt = data.updatedAt ?? now;

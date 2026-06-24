@@ -2,9 +2,9 @@ import { initDb, getAllBatteries, getMeasurementsByBatteryId, getSettings, saveS
 import { Battery, createBattery, updateBattery, archiveBattery, restoreBattery } from "./battery.js";
 import { createChargeMeasurement, createLedMeasurement, createPercentageMeasurement } from "./measurement.js";
 import { calculateBatteryStatus, sortBatteryStatusItems } from "./calculation.js";
-import { renderDashboard, renderArchivesPage, renderBatteryDetails, openSettingsModal, openBatteryFormModal, openAddMeasurementModal, openQuickMeasurementPicker, openBatteryActionModal, openArchivesDeletePicker, openDashboardActionModal, closeModal, setFabVisible } from "./ui.js";
+import { renderDashboard, renderArchivesPage, renderBatteryDetails, openSettingsModal, openBatteryFormModal, openAddMeasurementModal, openQuickMeasurementPicker, openBatteryActionModal, openArchivesDeletePicker, openDashboardActionModal, closeModal, setFabVisible, openUpdateAvailableModal } from "./ui.js";
 import { downloadJsonBackup, readJsonBackup, replaceWithImportedData } from "./import-export.js";
-import { INPUT_MODES, VIEWS, THEMES, STATUS, DASHBOARD_FILTERS } from "./constants.js";
+import { INPUT_MODES, VIEWS, THEMES, STATUS, DASHBOARD_FILTERS, APP_VERSION } from "./constants.js";
 import { updateSettings } from "./settings.js";
 
 let state = {
@@ -92,7 +92,7 @@ function openSettingsView() {
   openSettingsModal(state.settings, {
     onSave: handleSettingsSave,
     onCheckUpdate: handleCheckUpdate,
-    onExportJson: downloadJsonBackup,
+    onExportJson: handleExportJson,
     onImportJson: handleImportFile
   });
 }
@@ -143,29 +143,35 @@ async function handleSettingsSave(updates) {
   await checkCriticalNotifications();
 }
 
+async function handleExportJson() {
+  downloadJsonBackup();
+  state.settings = updateSettings(state.settings, { lastExportAt: new Date().toISOString() });
+  await saveSettings(state.settings);
+  await reloadState();
+  if (state.view === VIEWS.DASHBOARD) renderDashboardView();
+}
+
 async function handleCheckUpdate() {
-  if (!("serviceWorker" in navigator)) {
-    alert("Les mises à jour automatiques ne sont pas disponibles sur ce navigateur.");
-    return;
-  }
-
   try {
-    const registration = swRegistration ?? await navigator.serviceWorker.getRegistration("./");
+    const response = await fetch(`./version.json?ts=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("version.json indisponible");
+    const versionInfo = await response.json();
 
-    if (!registration) {
-      alert("Service worker non trouvé. Recharge l'application puis réessaie.");
+    if (!versionInfo?.version || versionInfo.version === APP_VERSION) {
+      alert("BattTrack est déjà à jour.");
       return;
     }
 
-    await registration.update();
-
-    if (registration.waiting) {
-      showUpdateAvailableBanner(registration);
-      closeModal();
-      return;
-    }
-
-    alert("BattTrack est déjà à jour.");
+    openUpdateAvailableModal(versionInfo, {
+      onApplyUpdate: async () => {
+        if (swRegistration) await swRegistration.update();
+        if (swRegistration?.waiting) {
+          swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
+          return;
+        }
+        window.location.reload();
+      }
+    });
   } catch (error) {
     console.warn("Vérification de mise à jour impossible", error);
     alert("Impossible de vérifier les mises à jour pour le moment.");

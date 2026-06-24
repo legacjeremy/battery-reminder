@@ -1,0 +1,12 @@
+{
+  "version": "1.3.1",
+  "date": "2026-06-24",
+  "title": "Corrections UX et mise à jour professionnelle",
+  "changes": [
+    "Correction du remplissage des icônes batterie selon le pourcentage.",
+    "Blocage du scroll de l arrière-plan quand une modale est ouverte.",
+    "Ajout du système de version avec nouveautés visibles.",
+    "Ajout du rappel de sauvegarde avec suivi du dernier export.",
+    "Recherche étendue dans le nom et les notes des batteries."
+  ]
+}

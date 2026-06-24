@@ -1,9 +1,10 @@
-const CACHE_NAME = "batttrack-v1-3";
+const CACHE_NAME = "batttrack-v1-3-1";
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./version.json",
   "./css/tokens.css",
   "./css/style.css",
   "./js/app.js",

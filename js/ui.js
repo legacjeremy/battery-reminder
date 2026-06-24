@@ -68,7 +68,7 @@ export function renderDashboard(items, settings, archivedCount, activeFilter, ha
 
   search.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
-    const searched = filtered.filter(i => i.battery.name.toLowerCase().includes(q));
+    const searched = filtered.filter(i => searchBattery(i.battery, q));
     zone.innerHTML = searched.length ? renderBatteryList(searched) : `<p class="empty-state">Aucune batterie trouvée.</p>`;
     bind();
   });
@@ -135,6 +135,7 @@ export function renderBatteryDetails(battery, measurements, status, handlers) {
       <p>Mesures : <strong>${status.measurementCount}</strong></p>
       <p>Cycles : <strong>${status.cycleCount}</strong></p>
       <p>Perte moyenne : <strong>${status.averageDischargePerDay.toFixed(3)} % / jour</strong></p>
+      ${renderMiniChart(measurements)}
     </section>
 
     <section class="card">
@@ -188,6 +189,7 @@ export function openSettingsModal(settings, handlers) {
 
       <section class="settings-section">
         <h3>Données</h3>
+        <p class="helper-text">Dernier export : <strong>${settings.lastExportAt ? formatRelativeDate(settings.lastExportAt.slice(0, 10)) : "jamais"}</strong></p>
         <div class="action-row">
           <button id="export-json" class="button secondary-button" type="button">💾 Exporter JSON</button>
           <label class="button secondary-button">📥 Importer JSON<input id="import-json-input" type="file" accept="application/json" hidden></label>
@@ -246,12 +248,12 @@ export function openAboutModal() {
 
     <h3>Code source</h3>
     <p>
-      <a href="https://github.com/legacjeremy/BattTrack" target="_blank" rel="noopener noreferrer">Voir le projet GitHub</a>
+      <a href="https://github.com/c34gl3j3rmy/BattTrack" target="_blank" rel="noopener noreferrer">Voir le projet GitHub</a>
     </p>
 
     <div class="action-row">
-      <a class="button secondary-button" href="https://github.com/legacjeremy/BattTrack/issues/new?labels=bug" target="_blank" rel="noopener noreferrer">🐛 Signaler un bug</a>
-      <a class="button secondary-button" href="https://github.com/legacjeremy/BattTrack/issues/new?labels=enhancement" target="_blank" rel="noopener noreferrer">💡 Proposer une amélioration</a>
+      <a class="button secondary-button" href="https://github.com/c34gl3j3rmy/BattTrack/issues/new?labels=bug" target="_blank" rel="noopener noreferrer">🐛 Signaler un bug</a>
+      <a class="button secondary-button" href="https://github.com/c34gl3j3rmy/BattTrack/issues/new?labels=enhancement" target="_blank" rel="noopener noreferrer">💡 Proposer une amélioration</a>
     </div>
 
     <h3>Licence</h3>
@@ -259,6 +261,25 @@ export function openAboutModal() {
   `);
 
   modalRoot.querySelector("#close-about").onclick = closeModal;
+}
+
+export function openUpdateAvailableModal(versionInfo, handlers) {
+  const changes = Array.isArray(versionInfo.changes) ? versionInfo.changes.slice(0, 5) : [];
+
+  openModal(`
+    ${renderModalHeader("🆕 Mise à jour disponible", "close-update")}
+    <p><strong>Version ${escapeHtml(versionInfo.version)}</strong></p>
+    ${versionInfo.title ? `<p>${escapeHtml(versionInfo.title)}</p>` : ""}
+    ${changes.length ? `<ul class="update-list">${changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul>` : ""}
+    <div class="action-row">
+      <button id="apply-update-button" class="button" type="button">Mettre à jour maintenant</button>
+      <button id="later-update-button" class="button secondary-button" type="button">Plus tard</button>
+    </div>
+  `);
+
+  modalRoot.querySelector("#close-update").onclick = closeModal;
+  modalRoot.querySelector("#later-update-button").onclick = closeModal;
+  modalRoot.querySelector("#apply-update-button").onclick = handlers.onApplyUpdate;
 }
 
 export function openDashboardActionModal(handlers) {
@@ -295,7 +316,7 @@ export function openQuickMeasurementPicker(items, handlers, title = "Ajouter une
 
   search.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
-    list.innerHTML = renderQuickBatteryList(active.filter(i => i.battery.name.toLowerCase().includes(q)));
+    list.innerHTML = renderQuickBatteryList(active.filter(i => searchBattery(i.battery, q)));
     bind();
   });
 
@@ -463,6 +484,7 @@ export function openAddMeasurementModal(battery, handlers, existingMeasurement =
 
 export function closeModal() {
   modalRoot.innerHTML = "";
+  document.body.classList.remove("modal-open");
 }
 
 function renderSummaryButton(filter, activeFilter, badgeClass, content) {
@@ -576,6 +598,49 @@ function renderBatteryLevelIcon(status) {
   `;
 }
 
+function renderMiniChart(measurements) {
+  const points = [...measurements]
+    .filter(m => typeof m.levelPercent === "number")
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-12);
+
+  if (points.length < 2) {
+    return `<p class="helper-text">Mini graphique disponible après au moins 2 mesures.</p>`;
+  }
+
+  const width = 320;
+  const height = 90;
+  const padding = 8;
+  const firstDate = new Date(`${points[0].date}T00:00:00`);
+  const lastDate = new Date(`${points.at(-1).date}T00:00:00`);
+  const rangeMs = Math.max(1, lastDate - firstDate);
+
+  const coords = points.map(point => {
+    const date = new Date(`${point.date}T00:00:00`);
+    const x = padding + ((date - firstDate) / rangeMs) * (width - padding * 2);
+    const y = padding + ((100 - point.levelPercent) / 100) * (height - padding * 2);
+    return { x, y };
+  });
+
+  const polyline = coords.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+
+  return `
+    <svg class="mini-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Évolution récente du niveau de batterie">
+      <line class="mini-chart-grid" x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}"/>
+      <line class="mini-chart-grid" x1="${padding}" y1="${height / 2}" x2="${width - padding}" y2="${height / 2}"/>
+      <line class="mini-chart-grid" x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}"/>
+      <polyline class="mini-chart-line" points="${polyline}"/>
+      ${coords.map(p => `<circle class="mini-chart-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3"/>`).join("")}
+    </svg>
+  `;
+}
+
+function searchBattery(battery, query) {
+  if (!query) return true;
+  const haystack = `${battery.name ?? ""} ${battery.notes ?? ""}`.toLowerCase();
+  return haystack.includes(query);
+}
+
 function inputTypeFromBattery(battery) {
   if (!battery) return BATTERY_INPUT_TYPES.PERCENTAGE;
   if (battery.inputType) return battery.inputType;
@@ -611,6 +676,7 @@ function statusClass(status) {
 }
 
 function openModal(content) {
+  document.body.classList.add("modal-open");
   modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal">${content}</div></div>`;
 }
 
