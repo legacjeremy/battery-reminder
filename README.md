@@ -29,14 +29,11 @@ Elle est pensée pour les batteries que l'on oublie facilement : drone, perceuse
 - Export et import JSON des données.
 - Thème clair, sombre ou système.
 - Installation en PWA sur smartphone ou ordinateur.
+- Vérification des mises à jour depuis les GitHub Releases.
 
-## Captures et assets
+## Assets du dépôt
 
-Les visuels du dépôt sont rangés dans :
-
-```text
-assets/images/
-```
+Les visuels du README sont dans `assets/images/`.
 
 | Fichier | Usage |
 |---|---|
@@ -45,31 +42,33 @@ assets/images/
 | `assets/images/screenshot-battery-detail.png` | Capture d'une fiche batterie |
 | `assets/images/screenshot-update-modal.png` | Capture de la modale de mise à jour |
 
-Les icônes PWA sont rangées dans :
-
-```text
-assets/
-```
+Les icônes PWA sont dans `assets/`.
 
 | Fichier | Usage |
 |---|---|
-| `assets/icon-192.png` | Icône PWA standard 192 px |
-| `assets/icon-512.png` | Icône PWA standard 512 px |
+| `assets/icon-192.png` | Icône PWA 192 px |
+| `assets/icon-512.png` | Icône PWA 512 px |
 | `assets/icon-192-maskable.png` | Icône Android maskable 192 px |
 | `assets/icon-512-maskable.png` | Icône Android maskable 512 px |
 | `assets/apple-touch-icon.png` | Icône iOS |
 | `assets/favicon.png` | Favicon |
-| `assets/logo.png` | Logo utilisé dans l'application |
+| `assets/logo.png` | Logo de l'application |
 
-## Mise à jour
+## Mises à jour
 
-BattTrack peut vérifier la version disponible et afficher un message simple du type :
+BattTrack vérifie la dernière version publiée dans les GitHub Releases.
 
-```text
-Mises à jour disponibles : v1.4.0
-```
+Lorsqu'une version plus récente existe, l'application affiche :
 
-L'objectif est de s'appuyer sur les GitHub Releases pour consulter le détail complet des nouveautés.
+`Mises à jour disponibles : v1.4.0`
+
+Le bouton d'action ouvre la page de Release GitHub correspondante pour consulter le détail complet des nouveautés.
+
+## Publier une nouvelle version
+
+1. Mettre à jour la version locale dans `js/constants.js`.
+2. Publier une nouvelle GitHub Release avec un tag du type `v1.5.0`.
+3. L'application détecte automatiquement cette Release comme dernière version disponible.
 
 ## Version actuelle
 
@@ -84,40 +83,18 @@ v1.4.0
 - Graphique coloré selon les seuils.
 - Correction du mode LED.
 - Correction du démarrage de l'application après refactorisation des modules.
+- Vérification des mises à jour via les GitHub Releases.
 
 ## Structure du projet
 
-```text
-BattTrack/
-├── assets/
-│   ├── images/
-│   ├── icons/
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   ├── icon-192-maskable.png
-│   ├── icon-512-maskable.png
-│   ├── apple-touch-icon.png
-│   ├── favicon.png
-│   └── logo.png
-├── css/
-│   ├── style.css
-│   └── tokens.css
-├── js/
-│   ├── app.js
-│   ├── battery.js
-│   ├── calculation.js
-│   ├── constants.js
-│   ├── db.js
-│   ├── import-export.js
-│   ├── measurement.js
-│   ├── settings.js
-│   └── ui.js
-├── index.html
-├── manifest.json
-├── service-worker.js
-├── version.json
-└── README.md
-```
+- `assets/` : icônes PWA, logo et visuels.
+- `assets/images/` : bannière et captures d'écran du README.
+- `assets/icons/` : icônes internes de l'application.
+- `css/` : styles et variables graphiques.
+- `js/` : logique de l'application.
+- `index.html` : point d'entrée.
+- `manifest.json` : configuration PWA.
+- `service-worker.js` : cache et installation PWA.
 
 ## Données
 
@@ -128,9 +105,10 @@ Aucun compte utilisateur, serveur ou API externe n'est nécessaire pour utiliser
 ## GitHub
 
 - Projet : https://github.com/c34gl3j3rmy/BattTrack
+- Releases : https://github.com/c34gl3j3rmy/BattTrack/releases
 - Signaler un bug : https://github.com/c34gl3j3rmy/BattTrack/issues/new?labels=bug
 - Proposer une amélioration : https://github.com/c34gl3j3rmy/BattTrack/issues/new?labels=enhancement
 
 ## Licence
 
-Code source disponible sur GitHub. Tous droits réservés.
+Code source disponible sur GitHub.
