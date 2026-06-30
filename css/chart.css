@@ -1,0 +1,15 @@
+.mini-chart {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 150px;
+  margin-top: 1rem;
+  overflow: visible;
+}
+
+@media (max-width: 520px) {
+  .mini-chart {
+    min-height: 125px;
+  }
+}
